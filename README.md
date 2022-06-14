@@ -3,4 +3,4 @@ This repository is Pytorch Implementation of Multi-Source Domain Adaptation for 
 
 Try to start sh train_msda.sh
 
-This repository is ongoing project.
+This repository is ongoing.
