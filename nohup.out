@@ -1,0 +1,16 @@
+/media/hdd1/CR-DA-DET/SW_Faster_ICR_CCR/lib/model/utils/config.py:377: YAMLLoadWarning: calling yaml.load() without Loader=... is deprecated, as the default Loader is unsafe. Please read https://msg.pyyaml.org/load for full details.
+  yaml_cfg = edict(yaml.load(f))
+/media/hdd1/CR-DA-DET/SW_Faster_ICR_CCR/lib/model/utils/net_utils.py:376: UserWarning: Implicit dimension choice for softmax has been deprecated. Change the call to include dim=X as an argument.
+  P = F.softmax(inputs)
+Traceback (most recent call last):
+  File "train_pseudo.py", line 629, in <module>
+    pseudo_label, pseudo_num = make_pseudo(fasterRCNN, data_t, im_data, im_info, gt_boxes, num_boxes, confidence_score = args.cf_score)
+NameError: name 'make_pseudo' is not defined
+/media/hdd1/CR-DA-DET/SW_Faster_ICR_CCR/lib/model/utils/config.py:377: YAMLLoadWarning: calling yaml.load() without Loader=... is deprecated, as the default Loader is unsafe. Please read https://msg.pyyaml.org/load for full details.
+  yaml_cfg = edict(yaml.load(f))
+/media/hdd1/CR-DA-DET/SW_Faster_ICR_CCR/lib/model/utils/net_utils.py:376: UserWarning: Implicit dimension choice for softmax has been deprecated. Change the call to include dim=X as an argument.
+  P = F.softmax(inputs)
+Traceback (most recent call last):
+  File "train_pseudo.py", line 629, in <module>
+    pseudo_label, pseudo_num = make_pseudo(fasterRCNN, data_t, im_data, im_info, gt_boxes, num_boxes, confidence_score = args.cf_score)
+NameError: name 'make_pseudo' is not defined
