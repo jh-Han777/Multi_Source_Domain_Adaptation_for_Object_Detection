@@ -659,7 +659,7 @@ if __name__ == "__main__":
                 im_info,
                 gt_boxes,
                 num_boxes,
-                subnet="subnet1"
+                subnet="subnet2"
             )
 
             loss += (
