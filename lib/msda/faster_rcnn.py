@@ -280,16 +280,18 @@ class _fasterRCNN(nn.Module):
 
     @torch.no_grad()
     def step(self,lmb1,lmb2):
-        self.RCNN_rpn_ema.RPN_Conv.weight = lmb1 * self.RCNN_rpn1.RPN_Conv.weight + lmb2 * self.RCNN_rpn2.RPN_Conv.weight
-        self.RCNN_rpn_ema.RPN_cls_score.weight = lmb1 * self.RCNN_rpn1.RPN_cls_score.weight + lmb2 * self.RCNN_rpn2.RPN_cls_score.weight
-        self.RCNN_rpn_ema.RPN_bbox_pred.weight = lmb1 * self.RCNN_rpn1.RPN_bbox_pred.weight + lmb2 * self.RCNN_rpn2.RPN_bbox_pred.weight
+        alpha = 0.99
+        for ema_param, param1, param2 in zip(self.RCNN_rpn_ema.parameters(), self.RCNN_rpn1.parameters(), self.RCNN_rpn2.parameters()):
+            param = lmb1 * param1 + lmb2 * param2
+            ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
+            ema_param.requires_grad = False
 
-        self.RCNN_rpn_ema.RPN_Conv.weight.required_grad = False
-        self.RCNN_rpn_ema.RPN_cls_score.weight.required_grad = False
-        self.RCNN_rpn_ema.RPN_bbox_pred.weight.required_grad = False
-        # for param in self.RCNN_rpn_ema.RPN_cls_score.parameters():
-        #     param.required_grad = False
-        # for param in self.RCNN_rpn_ema.RPN_Conv.parameters():
-        #     param.required_grad = False
-        # for param in self.RCNN_rpn_ema.RPN_bbox_pred.parameters():
-        #     param.required_grad = False
+        for ema_param, param1, param2 in zip(self.RCNN_roi_pool_ema.parameters(), self.RCNN_roi_pool1.parameters(), self.RCNN_roi_pool2.parameters()):
+            param = lmb1 * param1 + lmb2 * param2
+            ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
+            ema_param.requires_grad = False
+
+        for ema_param, param1, param2 in zip(self.RCNN_roi_align_ema.parameters(), self.RCNN_roi_align1.parameters(), self.RCNN_roi_align2.parameters()):
+            param = lmb1 * param1 + lmb2 * param2
+            ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
+            ema_param.requires_grad = False
