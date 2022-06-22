@@ -3,4 +3,4 @@ This repository is Pytorch Implementation of Multi-Source Domain Adaptation for 
 
 Try to start sh train_msda.sh
 
-This code is under revision
+If you want to test, try test_msda.py --net "BACKBONE" --gpus "GPU ID" --model_prefix "SAVED MODEL"
