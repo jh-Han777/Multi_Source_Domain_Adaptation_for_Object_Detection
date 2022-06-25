@@ -751,16 +751,14 @@ if __name__ == "__main__":
                 end = time.time()
                 if step > 0:
                     loss_temp /= args.disp_interval + 1
-
-                #Megvii loss
-                # source_ins_da_loss = source_ins_da.item() * args.instance_da_eta
-                # target_ins_da_loss = target_ins_da.item() * args.instance_da_eta
-
-                # loss_category_cls = category_loss_cls.item() #Megvii
+                    
                 loss_rpn_cls = rpn_loss_cls_s1.item() + rpn_loss_cls_s2.item()
                 loss_rpn_box = rpn_loss_bbox_s1.item() + rpn_loss_bbox_s2.item()
                 loss_rcnn_cls = RCNN_loss_cls_s1.item() + RCNN_loss_cls_s2.item()
                 loss_rcnn_box = RCNN_loss_bbox_s1.item() + RCNN_loss_bbox_s2.item()
+                loss_align_low = loss_low_align.item()
+                loss_align_high = loss_high_align1.item() + loss_high_align2.item()
+                
                 if epoch > args.burn_in:
                     loss_measure = loss_align.item()
                 else:
@@ -777,14 +775,16 @@ if __name__ == "__main__":
                 )
 
                 print(
-                    "\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f loss_distance: %.4f eta: %.4f"
+                    "\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f loss_align_low: %.4f loss_align_high: %.4f loss_consistency: %.4f eta: %.4f"
                     % (
                         #loss_category_cls, #Megvii
                         loss_rpn_cls,
                         loss_rpn_box,
                         loss_rcnn_cls,
                         loss_rcnn_box,
-                        loss_measure,
+                        loss_align_low,
+                        loss_align_high,
+                        loss_consistency,
                         args.eta,
                     ),flush=True
                 )
