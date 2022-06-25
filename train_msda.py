@@ -620,13 +620,13 @@ if __name__ == "__main__":
                 subnet = "subnet1"
             )
 
-            loss = (
+            loss_task = (
                  rpn_loss_cls_s1.mean()
                 + rpn_loss_bbox_s1.mean()
                 + RCNN_loss_cls_s1.mean()
                 + RCNN_loss_bbox_s1.mean()
             )
-            loss_temp = loss.item()
+            loss_temp = loss_task.item()
 
             # domain label
             domain_s1 = Variable(torch.zeros(out_d_s1.size(0)).long().cuda())
@@ -662,14 +662,14 @@ if __name__ == "__main__":
                 subnet="subnet2"
             )
 
-            loss += (
+            loss_task += (
                     rpn_loss_cls_s2.mean()
                     + rpn_loss_bbox_s2.mean()
                     + RCNN_loss_cls_s2.mean()
                     + RCNN_loss_bbox_s2.mean()
             )
 
-            loss_temp += loss.item()
+            loss_temp += loss_task.item()
 
             # domain label
             domain_s2 = Variable(torch.zeros(out_d_s2.size(0)).long().cuda())
@@ -677,8 +677,6 @@ if __name__ == "__main__":
             dloss_s2 = 0.5 * FL(out_d_s2, domain_s2)
             # local alignment loss
             dloss_s_p2 = 0.5 * torch.mean(out_d_pixel_s2 ** 2)
-
-
 
             with torch.no_grad():
                 im_data.resize_(data_t[0].size()).copy_(data_t[0])
@@ -709,38 +707,38 @@ if __name__ == "__main__":
             domain_t1 = Variable(torch.ones(out_d_t1.size(0)).long().cuda())
             dloss_t1 = 0.5 * FL(out_d_t1, domain_t1)
             # local alignment loss
-            dloss_t_p1 = 0.5 * torch.mean((1 - out_d_pixel_t1) ** 2)
+            dloss_t_p = 0.5 * torch.mean((1 - out_d_pixel_t1) ** 2)
 
             # domain label
             domain_t2 = Variable(torch.ones(out_d_t2.size(0)).long().cuda())
             dloss_t2 = 0.5 * FL(out_d_t2, domain_t2)
-            # local alignment loss
-            dloss_t_p2 = 0.5 * torch.mean((1 - out_d_pixel_t2) ** 2)
 
-            loss_low_align = dloss_s_p1 + dloss_s_p2 + dloss_t_p1 + dloss_t_p2
+
+            loss_low_align = 0.5 * (dloss_s_p1 + dloss_s_p2) + dloss_t_p
             loss_high_align1 = dloss_s1 + dloss_t1
             loss_high_align2 = dloss_s2 + dloss_t2
 
-            lmb1.append(loss_high_align1)
-            lmb2.append(loss_high_align2)
+            lmb1.append(loss_high_align1.item())
+            lmb2.append(loss_high_align2.item())
             loss_align = 0.5 * loss_low_align + 0.5 * (loss_high_align1 + loss_high_align2)
+
+            loss = loss_task + loss_align
 
             if epoch > args.burn_in:
                 lmb1_mean = round((sum(lmb1) / len(lmb1)),2)
                 lmb2_mean = round((sum(lmb2) / len(lmb2)), 2)
 
-                if epoch == args.burn_in +1 and step == 0:
-                    fasterRCNN.step(lmb1_mean,lmb2_mean)
+                fasterRCNN.step(lmb1_mean,lmb2_mean)
 
-                align_cls, align_bbox = fasterRCNN(
+                loss_con = fasterRCNN(
                     im_data,
                     im_info,
                     gt_boxes,
                     num_boxes,
                     subnet="ema",
                 )
-                loss_rpn_align = align_cls + align_bbox
-                fasterRCNN.step(lmb1_mean,lmb2_mean)
+
+                loss += loss_con.mean()
 
             optimizer.zero_grad()
             loss.backward()
@@ -758,11 +756,10 @@ if __name__ == "__main__":
                 loss_rcnn_box = RCNN_loss_bbox_s1.item() + RCNN_loss_bbox_s2.item()
                 loss_align_low = loss_low_align.item()
                 loss_align_high = loss_high_align1.item() + loss_high_align2.item()
-                
                 if epoch > args.burn_in:
-                    loss_measure = loss_align.item()
+                    loss_consistency = loss_con.item()
                 else:
-                    loss_measure = 0
+                    loss_consistency = 0
                 fg_cnt = torch.sum(rois_label.data.ne(0))
                 bg_cnt = rois_label.data.numel()
 
