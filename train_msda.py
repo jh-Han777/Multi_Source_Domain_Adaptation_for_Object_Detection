@@ -714,13 +714,13 @@ if __name__ == "__main__":
             dloss_t2 = 0.5 * FL(out_d_t2, domain_t2)
 
 
-            loss_low_align = 0.5 * (dloss_s_p1 + dloss_s_p2) + dloss_t_p
+            loss_low_align = (dloss_s_p1 + dloss_s_p2) + dloss_t_p
             loss_high_align1 = dloss_s1 + dloss_t1
             loss_high_align2 = dloss_s2 + dloss_t2
 
             lmb1.append(loss_high_align1.item())
             lmb2.append(loss_high_align2.item())
-            loss_align = 0.5 * loss_low_align + 0.5 * (loss_high_align1 + loss_high_align2)
+            loss_align = loss_low_align + 0.5 * (loss_high_align1 + loss_high_align2)
 
             loss = loss_task + loss_align
 
