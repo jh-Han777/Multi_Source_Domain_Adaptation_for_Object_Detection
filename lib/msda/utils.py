@@ -31,7 +31,7 @@ def consist_loss(pred, pred_ema):
     for idx, gt in enumerate(pred_ema):
         ious, max_iou, max_index = get_max_iou(pred,pred_ema)
         loss += abs(max_index - idx) * max_iou
-
+     loss /= len(pred_ema)
     return loss
 
 
