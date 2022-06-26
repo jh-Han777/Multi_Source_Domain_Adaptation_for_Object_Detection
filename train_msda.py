@@ -738,7 +738,7 @@ if __name__ == "__main__":
                     subnet="ema",
                 )
 
-                loss += loss_con.mean()
+                loss += loss_con
 
             optimizer.zero_grad()
             loss.backward()
