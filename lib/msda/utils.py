@@ -6,13 +6,13 @@ def get_max_iou(pred_bboxes, gt_bbox):
     :param gt_bbox: [x1, y1, x2, y2]
     :return:
     '''
-    ixmin = torch.maximum(pred_bboxes[:, 1], gt_bbox[1])
-    iymin = torch.maximum(pred_bboxes[:, 2], gt_bbox[2])
-    ixmax = torch.minimum(pred_bboxes[:, 3], gt_bbox[3])
-    iymax = torch.minimum(pred_bboxes[:, 4], gt_bbox[4])
+    ixmin = torch.max(pred_bboxes[:, 1], gt_bbox[1])
+    iymin = torch.max(pred_bboxes[:, 2], gt_bbox[2])
+    ixmax = torch.min(pred_bboxes[:, 3], gt_bbox[3])
+    iymax = torch.min(pred_bboxes[:, 4], gt_bbox[4])
 
-    iws = torch.maximum(ixmax - ixmin + 1.0, 0.)
-    ihs = torch.maximum(iymax - iymin + 1.0, 0.)
+    iws = torch.max(ixmax - ixmin + 1.0, torch.tensor(0.).cuda())
+    ihs = torch.max(iymax - iymin + 1.0, torch.tensor(0.).cuda())
 
     inters = iws * ihs
 
@@ -27,12 +27,15 @@ def get_max_iou(pred_bboxes, gt_bbox):
 
 def consist_loss(pred, pred_ema):
     loss = 0
-
-    for idx, gt in enumerate(pred_ema):
-        ious, max_iou, max_index = get_max_iou(pred,pred_ema)
+    pred = pred[0, :256, :]
+    pred_ema = pred_ema[0, :256, :]
+    
+    for idx, gt in enumerate(pred_ema):     # pop best?
+        ious, max_iou, max_index = get_max_iou(pred,gt)
         loss += abs(max_index - idx) * max_iou
-     loss /= len(pred_ema)
+    loss /= len(pred_ema)
     return loss
+
 
 
 @torch.no_grad()
