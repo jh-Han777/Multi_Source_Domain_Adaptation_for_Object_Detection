@@ -368,6 +368,23 @@ if __name__ == "__main__":
             "MAX_NUM_GT_BOXES",
             "30",
         ]
+       
+    elif args.dataset == "mskda_car":
+        print("loading our dataset...........")
+        args.s1_imdb_name = "cityscapes_ms_car_train"
+        args.s2_imdb_name = "KITTI_car_train"
+        args.s1_imdbtest_name = "cityscapes_ms_car_test"
+        args.s2_imdbtest_name = "KITTI_car_test"
+        args.t_imdb_name = "bdd100k_daytime_car_train"
+        args.t_imdbtest_name = "bdd100k_daytime_car_val"
+        args.set_cfgs = [
+            "ANCHOR_SCALES",
+            "[8,16,32]",
+            "ANCHOR_RATIOS",
+            "[0.5,1,2]",
+            "MAX_NUM_GT_BOXES",
+            "30",
+        ]
 
     args.cfg_file = (
         "cfgs/{}_ls.yml".format(args.net)
