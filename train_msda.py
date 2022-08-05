@@ -1,3 +1,6 @@
+# NoRound
+# 25 epoch
+# low lever align change
 # --------------------------------------------------------
 # Pytorch multi-GPU Faster R-CNN
 # Licensed under The MIT License [see LICENSE for details]
@@ -34,7 +37,7 @@ from model.utils.net_utils import (
     weights_normal_init,
 )
 from roi_da_data_layer.roibatchLoader import roibatchLoader
-#from lib.last.roibatchloader import roibatchLoader
+# from lib.last.roibatchloader import roibatchLoader
 
 from roi_da_data_layer.roidb import combined_roidb
 from torch.autograd import Variable
@@ -45,6 +48,7 @@ from PIL import Image
 
 print(sys.path)
 torch.autograd.set_detect_anomaly(True)
+
 
 def parse_args():
     """
@@ -181,7 +185,7 @@ def parse_args():
         action="store_true",
     )
     parser.add_argument(
-        "--gamma", dest="gamma", help="value of gamma", default=1, type=float
+        "--gamma", dest="gamma", help="value of gamma", default=5, type=float
     )
     parser.add_argument(
         "--max_epochs",
@@ -198,7 +202,7 @@ def parse_args():
         "--eta",
         dest="eta",
         help="trade-off parameter between detection loss and domain-alignment loss."
-        " Used for Car datasets",
+             " Used for Car datasets",
         default=0.1,
         type=float,
     )
@@ -212,7 +216,7 @@ def parse_args():
     )
     parser.add_argument(
         "--burn_in",
-        dest = "burn_in",
+        dest="burn_in",
         default=10,
         type=int
     )
@@ -223,8 +227,26 @@ def parse_args():
         default=1,
         type=float
     )
+    """
+    #--------------------------------------------
+    save_dir = "/mnt/work2/phat/TEST/Ajust_ema_update_Multi_Source_Domain_Adaptation_for_Object_Detection/save_model/train_adap_sw"
+    dataset = "mskda_bdd"
+    net = "vgg16"
+    pretrained_path = "/mnt/work2/phat/Multi_Source_Domain_Adaptation_for_Object_Detection/pre_trained_model/vgg16_caffe.pth"
+    max_epoch = 20
+    burn_in = 10
+    #resume = True
+    #resume_name = "mskda_bdd_10.pth"
 
+    os.CUDA_VISIBLE_DEVICES = 3
+    train_cm = "--cuda --dataset {} --net {} --save_dir {} --pretrained_path {} --max_epoch {} --burn_in {}"\
+        .format(dataset, net, save_dir, pretrained_path, max_epoch, burn_in)
+
+    # --------------------------------------------
+    args = parser.parse_args(train_cm.split())
+    """
     args = parser.parse_args()
+
     return args
 
 
@@ -244,7 +266,7 @@ class sampler(Sampler):
     def __iter__(self):
         rand_num = torch.randperm(self.num_per_batch).view(-1, 1) * self.batch_size
         self.rand_num = (
-            rand_num.expand(self.num_per_batch, self.batch_size) + self.range
+                rand_num.expand(self.num_per_batch, self.batch_size) + self.range
         )
 
         self.rand_num_view = self.rand_num.view(-1)
@@ -256,6 +278,7 @@ class sampler(Sampler):
 
     def __len__(self):
         return self.num_data
+
 
 if __name__ == "__main__":
 
@@ -368,7 +391,6 @@ if __name__ == "__main__":
             "MAX_NUM_GT_BOXES",
             "30",
         ]
-       
     elif args.dataset == "mskda_car":
         print("loading our dataset...........")
         args.s1_imdb_name = "cityscapes_ms_car_train"
@@ -448,7 +470,7 @@ if __name__ == "__main__":
 
     dataset_s2 = roibatchLoader(
         s2_roidb,
-        s2_ratio_list,
+        s2_ratio_list.astype(np.float64),
         s2_ratio_index,
         args.batch_size,
         s2_imdb.num_classes,
@@ -528,8 +550,8 @@ if __name__ == "__main__":
                         "params": [value],
                         "lr": lr * (cfg.TRAIN.DOUBLE_BIAS + 1),
                         "weight_decay": cfg.TRAIN.BIAS_DECAY
-                        and cfg.TRAIN.WEIGHT_DECAY
-                        or 0,
+                                        and cfg.TRAIN.WEIGHT_DECAY
+                                        or 0,
                     }
                 ]
             else:
@@ -546,10 +568,15 @@ if __name__ == "__main__":
         optimizer = torch.optim.Adam(params)
 
     elif args.optimizer == "sgd":
-        optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
+        optimizer = torch.optim.SGD(params, lr=args.lr, momentum=cfg.TRAIN.MOMENTUM)
 
     if args.cuda:
         fasterRCNN.cuda()
+
+    # Loss memory bank
+
+    lmb1 = []
+    lmb2 = []
 
     if args.resume:
         print(args.resume_name)
@@ -561,9 +588,13 @@ if __name__ == "__main__":
         fasterRCNN.load_state_dict(checkpoint["model_faster"])
         optimizer.load_state_dict(checkpoint["optimizer"])
         lr = optimizer.param_groups[0]["lr"]
+        optimizer = torch.optim.SGD(params, lr=lr, momentum=cfg.TRAIN.MOMENTUM)
         if "pooling_mode" in checkpoint.keys():
             cfg.POOLING_MODE = checkpoint["pooling_mode"]
         print("loaded checkpoint %s" % (load_name))
+
+        lmb1 = checkpoint["lmb1"]
+        lmb1 = checkpoint["lmb2"]
 
     iters_per_epoch = int(10000 / args.batch_size)
     if args.ef:
@@ -571,21 +602,19 @@ if __name__ == "__main__":
     else:
         FL = FocalLoss(class_num=2, gamma=args.gamma)
 
-    lmb1 = []
-    lmb2 = []
     count_iter = 0
-
-    scheduler = CosineAnnealingLR(optimizer, T_max=4, eta_min=0.0001)
+    scheduler = CosineAnnealingLR(optimizer, T_max=args.max_epochs - args.start_epoch + 1)
 
     for epoch in range(args.start_epoch, args.max_epochs + 1):
+        # for epoch in range(args.start_epoch, 2):
         # setting to train mode
         fasterRCNN.train()
 
         loss_temp = 0
         start = time.time()
-        if epoch % (args.lr_decay_step + 1) == 0:
-            adjust_learning_rate(optimizer, args.lr_decay_gamma)
-            lr *= args.lr_decay_gamma
+        # if epoch % (args.lr_decay_step + 1) == 0:
+        #     adjust_learning_rate(optimizer, args.lr_decay_gamma)
+        #     lr *= args.lr_decay_gamma
 
         data_iter_s1 = iter(dataloader_s1)
         data_iter_s2 = iter(dataloader_s2)
@@ -593,13 +622,16 @@ if __name__ == "__main__":
         for step in range(iters_per_epoch):
             try:
                 data_s1 = next(data_iter_s1)
-                data_s2 = next(data_iter_s2)
             except:
                 data_iter_s1 = iter(dataloader_s1)
-                data_iter_s2 = iter(dataloader_s2)
-
                 data_s1 = next(data_iter_s1)
+
+            try:
                 data_s2 = next(data_iter_s2)
+            except:
+                data_iter_s2 = iter(dataloader_s2)
+                data_s2 = next(data_iter_s2)
+
             try:
                 data_t = next(data_iter_t)
             except:
@@ -634,23 +666,22 @@ if __name__ == "__main__":
                 im_info,
                 gt_boxes,
                 num_boxes,
-                subnet = "subnet1"
+                subnet="subnet1"
             )
-
             loss_task = (
-                 rpn_loss_cls_s1.mean()
-                + rpn_loss_bbox_s1.mean()
-                + RCNN_loss_cls_s1.mean()
-                + RCNN_loss_bbox_s1.mean()
+                    rpn_loss_cls_s1.mean()
+                    + rpn_loss_bbox_s1.mean()
+                    + RCNN_loss_cls_s1.mean()
+                    + RCNN_loss_bbox_s1.mean()
             )
             loss_temp = loss_task.item()
 
             # domain label
             domain_s1 = Variable(torch.zeros(out_d_s1.size(0)).long().cuda())
             # global alignment loss
-            dloss_s1 = 0.5 * FL(out_d_s1, domain_s1)
+            dloss_s1 = FL(out_d_s1, domain_s1)
             # local alignment loss
-            dloss_s_p1 = 0.5 * torch.mean(out_d_pixel_s1 ** 2)
+            dloss_s_p1 = torch.mean((1 - out_d_pixel_s1[0]) ** 2 + out_d_pixel_s1[1] ** 2 + out_d_pixel_s1[2] ** 2)
 
             # Source2
             with torch.no_grad():
@@ -691,9 +722,9 @@ if __name__ == "__main__":
             # domain label
             domain_s2 = Variable(torch.zeros(out_d_s2.size(0)).long().cuda())
             # global alignment loss
-            dloss_s2 = 0.5 * FL(out_d_s2, domain_s2)
+            dloss_s2 = FL(out_d_s2, domain_s2)
             # local alignment loss
-            dloss_s_p2 = 0.5 * torch.mean(out_d_pixel_s2 ** 2)
+            dloss_s_p2 = torch.mean((1 - out_d_pixel_s2[1]) ** 2 + out_d_pixel_s2[0] ** 2 + out_d_pixel_s1[2] ** 2)
 
             with torch.no_grad():
                 im_data.resize_(data_t[0].size()).copy_(data_t[0])
@@ -702,7 +733,7 @@ if __name__ == "__main__":
                 gt_boxes.resize_(1, 1, 5).zero_()
                 num_boxes.resize_(1).zero_()
 
-            out_d_pixel_t1, out_d_t1, = fasterRCNN(
+            out_d_pixel_t1, out_d_t1, base_feat1_trained, subnet1_base_feat2 = fasterRCNN(
                 im_data,
                 im_info,
                 gt_boxes,
@@ -711,41 +742,49 @@ if __name__ == "__main__":
                 subnet="subnet1"
             )
 
-            out_d_pixel_t2, out_d_t2, = fasterRCNN(
+            out_d_pixel_t2, out_d_t2, subnet2_base_feat2 = fasterRCNN(
                 im_data,
                 im_info,
                 gt_boxes,
                 num_boxes,
                 target=True,
-                subnet="subnet2"
+                subnet="subnet2",
+                base_feat1_trained=base_feat1_trained,
+                have_base_feat1=True,
             )
 
             # domain label
             domain_t1 = Variable(torch.ones(out_d_t1.size(0)).long().cuda())
-            dloss_t1 = 0.5 * FL(out_d_t1, domain_t1)
+            dloss_t1 = FL(out_d_t1, domain_t1)
             # local alignment loss
-            dloss_t_p = 0.5 * torch.mean((1 - out_d_pixel_t1) ** 2)
+            dloss_t_p = torch.mean((1 - out_d_pixel_t1[2]) ** 2)
 
             # domain label
             domain_t2 = Variable(torch.ones(out_d_t2.size(0)).long().cuda())
-            dloss_t2 = 0.5 * FL(out_d_t2, domain_t2)
-
+            dloss_t2 = FL(out_d_t2, domain_t2)
 
             loss_low_align = (dloss_s_p1 + dloss_s_p2) + dloss_t_p
+
             loss_high_align1 = dloss_s1 + dloss_t1
             loss_high_align2 = dloss_s2 + dloss_t2
+            loss_high_align = loss_high_align1 + loss_high_align2
 
-            lmb1.append(loss_high_align1.item())
-            lmb2.append(loss_high_align2.item())
-            loss_align = loss_low_align + 0.5 * (loss_high_align1 + loss_high_align2)
+            # lmb1.append(loss_high_align1.item())
+            # lmb2.append(loss_high_align2.item())
+            loss_align = loss_low_align + loss_high_align
 
             loss = loss_task + loss_align
 
-            if epoch > args.burn_in:
-                lmb1_mean = round((sum(lmb1) / len(lmb1)),2)
-                lmb2_mean = round((sum(lmb2) / len(lmb2)), 2)
+            if epoch >= args.burn_in:
+                lmb1.append(loss_high_align1.item())
+                lmb2.append(loss_high_align2.item())
+                lmb1_mean = sum(lmb1) / len(lmb1)
+                lmb2_mean = sum(lmb2) / len(lmb2)
 
-                fasterRCNN.step(lmb1_mean,lmb2_mean)
+                # if epoch == args.burn_in and iter == 0:
+                #     fasterRCNN._init_ema(lmb1_mean, lmb2_mean)
+
+                fasterRCNN.step(lmb1_mean, lmb2_mean)
 
                 loss_con = fasterRCNN(
                     im_data,
@@ -753,6 +792,11 @@ if __name__ == "__main__":
                     gt_boxes,
                     num_boxes,
                     subnet="ema",
+                    base_feat1_trained=base_feat1_trained,
+                    subnet1_base_feat2=subnet1_base_feat2,
+                    subnet2_base_feat2=subnet2_base_feat2,
+                    have_base_feat1=True,
+                    have_base_feat2=True,
                 )
 
                 loss += loss_con
@@ -761,19 +805,18 @@ if __name__ == "__main__":
             loss.backward()
             optimizer.step()
 
-
             if step % args.disp_interval == 0:
                 end = time.time()
                 if step > 0:
                     loss_temp /= args.disp_interval + 1
-                    
+
                 loss_rpn_cls = rpn_loss_cls_s1.item() + rpn_loss_cls_s2.item()
                 loss_rpn_box = rpn_loss_bbox_s1.item() + rpn_loss_bbox_s2.item()
                 loss_rcnn_cls = RCNN_loss_cls_s1.item() + RCNN_loss_cls_s2.item()
                 loss_rcnn_box = RCNN_loss_bbox_s1.item() + RCNN_loss_bbox_s2.item()
                 loss_align_low = loss_low_align.item()
                 loss_align_high = loss_high_align1.item() + loss_high_align2.item()
-                if epoch > args.burn_in:
+                if epoch >= args.burn_in:
                     loss_consistency = loss_con.item()
                 else:
                     loss_consistency = 0
@@ -789,9 +832,9 @@ if __name__ == "__main__":
                 )
 
                 print(
-                    "\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f loss_align_low: %.4f loss_align_high: %.4f loss_consistency: %.4f eta: %.4f"
+                    "\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f loss_align_low: %.4f loss_align_high: %.4f loss_consistency: %.4f lr: %.6f"
                     % (
-                        #loss_category_cls, #Megvii
+                        # loss_category_cls, #Megvii
                         loss_rpn_cls,
                         loss_rpn_box,
                         loss_rcnn_cls,
@@ -799,8 +842,8 @@ if __name__ == "__main__":
                         loss_align_low,
                         loss_align_high,
                         loss_consistency,
-                        args.eta,
-                    ),flush=True
+                        scheduler.get_lr()[0],
+                    ), flush=True
                 )
 
                 loss_temp = 0
@@ -817,6 +860,9 @@ if __name__ == "__main__":
                     "optimizer": optimizer.state_dict(),
                     "pooling_mode": cfg.POOLING_MODE,
                     "class_agnostic": args.class_agnostic,
+                    "lr": scheduler.get_lr()[0],
+                    "lmb1": lmb1,
+                    "lmb2": lmb2
                 },
                 save_name,
             )
