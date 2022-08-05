@@ -12,6 +12,7 @@ import torchvision.models as models
 from msda.faster_rcnn import _fasterRCNN
 from model.utils.config import cfg
 from torch.autograd import Variable
+import copy
 
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -35,7 +36,7 @@ class netD_pixel(nn.Module):
         # self.bn1 = nn.BatchNorm2d(256)
         self.conv2 = conv1x1(256, 128)
         # self.bn2 = nn.BatchNorm2d(128)
-        self.conv3 = conv1x1(128, 1)
+        self.conv3 = conv1x1(128, 3)
 
         self.context = context
 
@@ -47,10 +48,10 @@ class netD_pixel(nn.Module):
             feat = F.avg_pool2d(x, (x.size(2), x.size(3)))
             # feat = x
             x = F.sigmoid(self.conv3(x))
-            return x.view(-1, 1), feat  # torch.cat((feat1,feat2),1)#F
+            return x.view(3, -1, 1), feat  # torch.cat((feat1,feat2),1)#F
         else:
             x = F.sigmoid(self.conv3(x))
-            return x.view(-1, 1)  # F.sigmoid(x)
+            return x.view(3, -1, 1)  # F.sigmoid(x)
 
 
 class netD(nn.Module):
@@ -132,9 +133,9 @@ class vgg16(_fasterRCNN):
         # print(vgg.features)
         self.RCNN_base1 = nn.Sequential(*list(vgg.features._modules.values())[:14])
 
-        self.RCNN_base_sub1 = nn.Sequential(*list(vgg.features._modules.values())[14:-1])
-        self.RCNN_base_sub2 = nn.Sequential(*list(vgg.features._modules.values())[14:-1])
-        self.RCNN_base_sub_ema = nn.Sequential(*list(vgg.features._modules.values())[14:-1])
+        self.RCNN_base_sub1 = copy.deepcopy(nn.Sequential(*list(vgg.features._modules.values())[14:-1]))
+        self.RCNN_base_sub2 = copy.deepcopy(nn.Sequential(*list(vgg.features._modules.values())[14:-1]))
+        self.RCNN_base_sub_ema = copy.deepcopy(nn.Sequential(*list(vgg.features._modules.values())[14:-1]))
 
 
         self.netD_pixel = netD_pixel(context=self.lc)
@@ -154,9 +155,9 @@ class vgg16(_fasterRCNN):
 
         # self.RCNN_base = _RCNN_base(vgg.features, self.classes, self.dout_base_model)
 
-        self.RCNN_top1 = vgg.classifier
-        self.RCNN_top2 = vgg.classifier
-        self.RCNN_top_ema = vgg.classifier
+        self.RCNN_top1 = copy.deepcopy(vgg.classifier)
+        self.RCNN_top2 = copy.deepcopy(vgg.classifier)
+        self.RCNN_top_ema = copy.deepcopy(vgg.classifier)
 
         self.RCNN_cls_score = nn.Linear(feat_d, self.n_classes)
 
