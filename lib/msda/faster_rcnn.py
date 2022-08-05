@@ -61,7 +61,8 @@ class _fasterRCNN(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d(output_size=(1, 1))
 
     def forward(
-            self, im_data, im_info,  gt_boxes, num_boxes, target=False,subnet=False, eta=1.0
+            self, im_data, im_info,  gt_boxes, num_boxes, target=False,subnet=False, eta=1.0, have_base_feat1=False ,base_feat1_trained=None,
+            subnet1_base_feat2=None, subnet2_base_feat2=None, have_base_feat2=True,
     ):
         batch_size = im_data.size(0)
 
@@ -70,14 +71,22 @@ class _fasterRCNN(nn.Module):
         num_boxes = num_boxes.data
 
         # feed image data to base model to obtain base feature map
-        base_feat1 = self.RCNN_base1(im_data)
+        if have_base_feat1:
+            base_feat1 = base_feat1_trained
+        else:
+            base_feat1 = self.RCNN_base1(im_data)
+
+
         if self.lc:
             d_pixel, _ = self.netD_pixel(grad_reverse(base_feat1, lambd=eta))
-            # print(d_pixel)
+            print('domain pixel',d_pixel)
             if not target:
                 _, feat_pixel = self.netD_pixel(base_feat1.detach())
         else:
-            d_pixel = self.netD_pixel(grad_reverse(base_feat1, lambd=eta))
+            if not have_base_feat1:
+                d_pixel = self.netD_pixel(grad_reverse(base_feat1, lambd=eta))
+            else:
+                d_pixel = None
 
         # base_feat = self.RCNN_base2(base_feat1)
         if subnet == "subnet1":
@@ -91,7 +100,7 @@ class _fasterRCNN(nn.Module):
             else:
                 domain_p = self.netD1(grad_reverse(base_feat, lambd=eta))
                 if target:
-                    return d_pixel, domain_p  # ,diff
+                    return d_pixel, domain_p, base_feat1, base_feat  # ,diff
             # feed base feature map tp RPN to obtain rois
             rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn1(
                 base_feat, im_info, gt_boxes, num_boxes
@@ -108,28 +117,33 @@ class _fasterRCNN(nn.Module):
             else:
                 domain_p = self.netD2(grad_reverse(base_feat, lambd=eta))
                 if target:
-                    return d_pixel, domain_p  # ,diff
+                    return d_pixel, domain_p, base_feat  # ,diff
             # feed base feature map tp RPN to obtain rois
             rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn2(
                 base_feat, im_info, gt_boxes, num_boxes
             )
 
         elif subnet == "ema":
+            domain_p = None
             base_feat = self.RCNN_base_sub_ema(base_feat1)
 
             if self.training:
-                base_feat_1 = self.RCNN_base_sub1(base_feat1)
-                base_feat_2 = self.RCNN_base_sub1(base_feat1)
+                if have_base_feat2:
+                    base_feat_1 = subnet1_base_feat2
+                    base_feat_2 = subnet2_base_feat2
+                else:
+                    base_feat_1 = self.RCNN_base_sub1(base_feat1)
+                    base_feat_2 = self.RCNN_base_sub2(base_feat1)   #1-->2
 
                 rpn_bbox_pred1 = self.RCNN_rpn1(
                     base_feat_1, im_info, gt_boxes, num_boxes
-                )
+                )[0]
                 rpn_bbox_pred2 = self.RCNN_rpn2(
                     base_feat_2, im_info, gt_boxes, num_boxes
-                )
+                )[0]
                 rpn_bbox_pred_ema = self.RCNN_rpn_ema(
                     base_feat, im_info, gt_boxes, num_boxes
-                )
+                )[0]
 
                 consist_loss1 = consist_loss(rpn_bbox_pred1,rpn_bbox_pred_ema)
                 consist_loss2 = consist_loss(rpn_bbox_pred2,rpn_bbox_pred_ema)
@@ -279,19 +293,66 @@ class _fasterRCNN(nn.Module):
         self._init_weights()
 
     @torch.no_grad()
-    def step(self,lmb1,lmb2):
+    def _init_ema(self, lmb1, lmb2):
+        weight1 = round(lmb1 / (lmb1 + lmb2), 2)
+        weight2 = round(lmb2 / (lmb1 + lmb2), 2)
+        for ema_param, param1, param2 in zip(self.RCNN_rpn_ema.parameters(), self.RCNN_rpn1.parameters(),
+                                             self.RCNN_rpn2.parameters()):
+            ema_param = weight1 * param1 + weight2 * param2
+            ema_param.requires_grad = False
+
+        for ema_param, param1, param2 in zip(self.RCNN_roi_pool_ema.parameters(), self.RCNN_roi_pool1.parameters(),
+                                             self.RCNN_roi_pool2.parameters()):
+            ema_param = weight1 * param1 + weight2 * param2
+            ema_param.requires_grad = False
+
+        for ema_param, param1, param2 in zip(self.RCNN_roi_align_ema.parameters(), self.RCNN_roi_align1.parameters(),
+                                             self.RCNN_roi_align2.parameters()):
+            ema_param = weight1 * param1 + weight2 * param2
+            ema_param.requires_grad = False
+
+        for ema_param, param1, param2 in zip(self.RCNN_base_sub_ema.parameters(), self.RCNN_base_sub1.parameters(),
+                                             self.RCNN_base_sub2.parameters()):
+            ema_param = weight1 * param1 + weight2 * param2
+            ema_param.requires_grad = False
+
+        for ema_param, param1, param2 in zip(self.RCNN_top_ema.parameters(), self.RCNN_top1.parameters(),
+                                             self.RCNN_top2.parameters()):
+            ema_param = weight1 * param1 + weight2 * param2
+            ema_param.requires_grad = False
+
+    @torch.no_grad()
+    def step(self, lmb1, lmb2):
         alpha = 0.99
-        for ema_param, param1, param2 in zip(self.RCNN_rpn_ema.parameters(), self.RCNN_rpn1.parameters(), self.RCNN_rpn2.parameters()):
-            param = lmb1 * param1 + lmb2 * param2
+        weight1 = lmb1 / (lmb1 + lmb2)
+        weight2 = lmb2 / (lmb1 + lmb2)
+
+        for ema_param, param1, param2 in zip(self.RCNN_rpn_ema.parameters(), self.RCNN_rpn1.parameters(),
+                                             self.RCNN_rpn2.parameters()):
+            param = weight1 * param1 + weight2 * param2
             ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
             ema_param.requires_grad = False
 
-        for ema_param, param1, param2 in zip(self.RCNN_roi_pool_ema.parameters(), self.RCNN_roi_pool1.parameters(), self.RCNN_roi_pool2.parameters()):
-            param = lmb1 * param1 + lmb2 * param2
+        for ema_param, param1, param2 in zip(self.RCNN_roi_pool_ema.parameters(), self.RCNN_roi_pool1.parameters(),
+                                             self.RCNN_roi_pool2.parameters()):
+            param = weight1 * param1 + weight2 * param2
             ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
             ema_param.requires_grad = False
 
-        for ema_param, param1, param2 in zip(self.RCNN_roi_align_ema.parameters(), self.RCNN_roi_align1.parameters(), self.RCNN_roi_align2.parameters()):
-            param = lmb1 * param1 + lmb2 * param2
+        for ema_param, param1, param2 in zip(self.RCNN_roi_align_ema.parameters(), self.RCNN_roi_align1.parameters(),
+                                             self.RCNN_roi_align2.parameters()):
+            param = weight1 * param1 + weight2 * param2
+            ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
+            ema_param.requires_grad = False
+
+        for ema_param, param1, param2 in zip(self.RCNN_base_sub_ema.parameters(), self.RCNN_base_sub1.parameters(),
+                                             self.RCNN_base_sub2.parameters()):
+            param = weight1 * param1 + weight2 * param2
+            ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
+            ema_param.requires_grad = False
+
+        for ema_param, param1, param2 in zip(self.RCNN_top_ema.parameters(), self.RCNN_top1.parameters(),
+                                             self.RCNN_top2.parameters()):
+            param = weight1 * param1 + weight2 * param2
             ema_param.data.mul_(alpha).add_(1 - alpha, param.data)
             ema_param.requires_grad = False
