@@ -227,24 +227,7 @@ def parse_args():
         default=1,
         type=float
     )
-    """
-    #--------------------------------------------
-    save_dir = "/mnt/work2/phat/TEST/Ajust_ema_update_Multi_Source_Domain_Adaptation_for_Object_Detection/save_model/train_adap_sw"
-    dataset = "mskda_bdd"
-    net = "vgg16"
-    pretrained_path = "/mnt/work2/phat/Multi_Source_Domain_Adaptation_for_Object_Detection/pre_trained_model/vgg16_caffe.pth"
-    max_epoch = 20
-    burn_in = 10
-    #resume = True
-    #resume_name = "mskda_bdd_10.pth"
 
-    os.CUDA_VISIBLE_DEVICES = 3
-    train_cm = "--cuda --dataset {} --net {} --save_dir {} --pretrained_path {} --max_epoch {} --burn_in {}"\
-        .format(dataset, net, save_dir, pretrained_path, max_epoch, burn_in)
-
-    # --------------------------------------------
-    args = parser.parse_args(train_cm.split())
-    """
     args = parser.parse_args()
 
     return args
