@@ -589,15 +589,10 @@ if __name__ == "__main__":
     scheduler = CosineAnnealingLR(optimizer, T_max=args.max_epochs - args.start_epoch + 1)
 
     for epoch in range(args.start_epoch, args.max_epochs + 1):
-        # for epoch in range(args.start_epoch, 2):
-        # setting to train mode
         fasterRCNN.train()
 
         loss_temp = 0
         start = time.time()
-        # if epoch % (args.lr_decay_step + 1) == 0:
-        #     adjust_learning_rate(optimizer, args.lr_decay_gamma)
-        #     lr *= args.lr_decay_gamma
 
         data_iter_s1 = iter(dataloader_s1)
         data_iter_s2 = iter(dataloader_s2)
@@ -752,8 +747,6 @@ if __name__ == "__main__":
             loss_high_align2 = dloss_s2 + dloss_t2
             loss_high_align = loss_high_align1 + loss_high_align2
 
-            # lmb1.append(loss_high_align1.item())
-            # lmb2.append(loss_high_align2.item())
             loss_align = loss_low_align + loss_high_align
 
             loss = loss_task + loss_align
@@ -763,9 +756,6 @@ if __name__ == "__main__":
                 lmb2.append(loss_high_align2.item())
                 lmb1_mean = sum(lmb1) / len(lmb1)
                 lmb2_mean = sum(lmb2) / len(lmb2)
-
-                # if epoch == args.burn_in and iter == 0:
-                #     fasterRCNN._init_ema(lmb1_mean, lmb2_mean)
 
                 fasterRCNN.step(lmb1_mean, lmb2_mean)
 
