@@ -249,7 +249,6 @@ class _fasterRCNN(nn.Module):
             rois,
             cls_prob,
             bbox_pred,
-            # category_loss_cls, #Megvii
             rpn_loss_cls,
             rpn_loss_bbox,
             RCNN_loss_cls,
@@ -257,7 +256,7 @@ class _fasterRCNN(nn.Module):
             rois_label,
             d_pixel,
             domain_p,
-        )  # ,diff
+        )
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
