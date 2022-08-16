@@ -88,7 +88,6 @@ class _fasterRCNN(nn.Module):
             else:
                 d_pixel = None
 
-        # base_feat = self.RCNN_base2(base_feat1)
         if subnet == "subnet1":
             base_feat = self.RCNN_base_sub1(base_feat1)
 
@@ -263,7 +262,6 @@ class _fasterRCNN(nn.Module):
             """
             weight initalizer: truncated normal and random normal.
             """
-            # x is a parameter
             if truncated:
                 m.weight.data.normal_().fmod_(2).mul_(stddev).add_(
                     mean
